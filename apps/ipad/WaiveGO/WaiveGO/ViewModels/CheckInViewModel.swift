@@ -33,10 +33,20 @@ final class CheckInViewModel: ObservableObject {
         }
     }
 
-    /// Applies a result and schedules a return to idle so the kiosk is ready for the
-    /// next guest without staff intervention.
+    /// Applies a result, plays the matching go/stop cue, and schedules a return to idle
+    /// so the kiosk is ready for the next guest without staff intervention.
     func resolve(_ newStatus: CheckInStatus) {
         status = newStatus
+
+        switch newStatus {
+        case .verified:
+            CheckInSoundPlayer.shared.playVerified()
+        case .notVerified:
+            CheckInSoundPlayer.shared.playNotVerified()
+        case .idle, .scanning:
+            break
+        }
+
         resetTask?.cancel()
         resetTask = Task {
             try? await Task.sleep(for: .seconds(4))
