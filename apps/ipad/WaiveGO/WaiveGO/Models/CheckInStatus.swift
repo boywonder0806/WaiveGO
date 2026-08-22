@@ -2,10 +2,11 @@
 //  CheckInStatus.swift
 //  WaiveGO
 //
-//  Represents where a single check-in attempt is in its lifecycle.
-//  TODO: once the facial-recognition service and API exist, `verified`/`notVerified`
-//  will be populated from a real match result instead of the mock data in
-//  CheckInViewModel.
+//  Represents where a single check-in attempt is in its lifecycle. `verified` /
+//  `notVerified` are populated from services/api's real /v1/checkin response (see
+//  APIClient.checkIn). `error` is distinct from `notVerified` on purpose — it means
+//  the system couldn't complete a check, not that this guest doesn't have a waiver,
+//  and staff should be able to tell those apart at a glance.
 
 import Foundation
 
@@ -14,12 +15,15 @@ enum CheckInStatus {
     case scanning
     case verified(GuestMatch)
     case notVerified(reason: NotVerifiedReason)
+    case error(message: String)
 }
 
 struct GuestMatch: Identifiable {
     let id = UUID()
     let guestName: String
-    let waiverExpirationDate: Date
+    // Not returned by /v1/checkin today (see services/api/src/routes/checkin.ts) —
+    // optional rather than fabricated.
+    let waiverExpirationDate: Date?
 }
 
 enum NotVerifiedReason {

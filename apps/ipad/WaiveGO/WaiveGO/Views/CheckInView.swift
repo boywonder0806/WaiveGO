@@ -36,6 +36,13 @@ struct CheckInView: View {
                         title: reason.title,
                         message: reason.message
                     )
+                case .error(let message):
+                    ResultStateView(
+                        tint: .orange,
+                        systemImage: "wifi.exclamationmark",
+                        title: "Check-In Unavailable",
+                        message: message
+                    )
                 }
 
                 Spacer()
@@ -69,6 +76,7 @@ struct CheckInView: View {
                 Button("No Match") { viewModel.simulateNotVerified(.noFaceMatch) }
                 Button("Expired") { viewModel.simulateNotVerified(.waiverExpired(guestName: "Sam Lee")) }
                 Button("No Waiver") { viewModel.simulateNotVerified(.noWaiverOnFile) }
+                Button("Server Error") { viewModel.resolve(.error(message: "Couldn't reach the check-in service.")) }
             }
             .buttonStyle(.bordered)
             .font(.caption)

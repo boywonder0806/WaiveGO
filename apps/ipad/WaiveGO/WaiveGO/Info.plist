@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	Allows plain HTTP to local-network addresses only (private IPs, .local
+	hostnames, loopback) — NOT general internet HTTP. Needed for local dev against
+	services/api running on a Mac (see AppConfig.swift). Safe to leave in even for
+	a production build since it doesn't weaken ATS for anything internet-facing;
+	remove once services/api is only ever reached over HTTPS (see AppConfig.swift).
+	-->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+</dict>
+</plist>

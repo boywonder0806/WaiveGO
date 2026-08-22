@@ -4,11 +4,13 @@
 //
 //  Runs the front camera (the kiosk-facing side, so it sees the guest) and publishes
 //  whether a face is currently in frame using on-device Vision face detection. This is
-//  detection only — "is there a face here" — not recognition/matching. Real matching
-//  still needs the facial-recognition service call, which isn't wired up yet.
+//  detection only — "is there a face here" — not recognition/matching. Real
+//  recognition happens server-side (services/api -> CompreFace); `captureStillJPEG()`
+//  is what grabs the frame that gets sent there.
 
 import AVFoundation
 import Combine
+import UIKit
 import Vision
 
 @MainActor
@@ -27,6 +29,12 @@ final class CameraService: NSObject, ObservableObject {
     nonisolated(unsafe) private var lastDetectionTime = Date.distantPast
     private let detectionInterval: TimeInterval = 0.2
 
+    // Updated on every frame (not throttled like Vision above) so a still capture is
+    // always reasonably fresh. Only ever written/read on sessionQueue or via the
+    // synchronized accessor below — nonisolated(unsafe) reflects that, not a promise
+    // of general thread safety.
+    nonisolated(unsafe) private var latestPixelBuffer: CVPixelBuffer?
+
     func start() {
         Task {
             isAuthorized = await requestAccess()
@@ -42,6 +50,17 @@ final class CameraService: NSObject, ObservableObject {
         sessionQueue.async { [weak self] in
             self?.session.stopRunning()
         }
+    }
+
+    /// Renders the most recent camera frame as JPEG data, for sending to
+    /// `services/api`. Returns nil if the camera never produced a frame (e.g. no
+    /// camera hardware, or called before the session actually started).
+    func captureStillJPEG(compressionQuality: CGFloat = 0.85) -> Data? {
+        guard let pixelBuffer = latestPixelBuffer else { return nil }
+        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+        let context = CIContext()
+        guard let cgImage = context.createCGImage(ciImage, from: ciImage.extent) else { return nil }
+        return UIImage(cgImage: cgImage).jpegData(compressionQuality: compressionQuality)
     }
 
     private func requestAccess() async -> Bool {
@@ -86,11 +105,12 @@ extension CameraService: AVCaptureVideoDataOutputSampleBufferDelegate {
         didOutput sampleBuffer: CMSampleBuffer,
         from connection: AVCaptureConnection
     ) {
+        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        latestPixelBuffer = pixelBuffer
+
         let now = Date()
         guard now.timeIntervalSince(lastDetectionTime) >= detectionInterval else { return }
         lastDetectionTime = now
-
-        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
 
         let request = VNDetectFaceRectanglesRequest()
         let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .up)

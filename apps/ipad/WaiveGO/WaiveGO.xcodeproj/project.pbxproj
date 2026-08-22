@@ -10,9 +10,22 @@
 		F2345320303A3FF400F40263 /* WaiveGO.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WaiveGO.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		F2345340303A3FF400F40263 /* Exceptions for "WaiveGO" folder in "WaiveGO" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = F234531F303A3FF400F40263 /* WaiveGO */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		F2345322303A3FF400F40263 /* WaiveGO */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				F2345340303A3FF400F40263 /* Exceptions for "WaiveGO" folder in "WaiveGO" target */,
+			);
 			path = WaiveGO;
 			sourceTree = "<group>";
 		};
@@ -256,6 +269,7 @@
 				DEVELOPMENT_TEAM = 25K54C89T4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = WaiveGO/Info.plist;
 				INFOPLIST_KEY_NSCameraUsageDescription = "WaiveGO scans your face at check-in to verify you have a signed waiver on file.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -289,6 +303,7 @@
 				DEVELOPMENT_TEAM = 25K54C89T4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = WaiveGO/Info.plist;
 				INFOPLIST_KEY_NSCameraUsageDescription = "WaiveGO scans your face at check-in to verify you have a signed waiver on file.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
