@@ -108,14 +108,53 @@ private struct IdleStateView: View {
 }
 
 private struct ScanningStateView: View {
+    @StateObject private var camera = CameraService()
+    @State private var isPulsing = false
+
+    private let circleSize: CGFloat = 320
+
     var body: some View {
         VStack(spacing: 20) {
-            ProgressView()
-                .controlSize(.extraLarge)
-            Text("Scanning…")
+            ZStack {
+                if camera.isAuthorized {
+                    CameraPreviewView(session: camera.session)
+                        .clipShape(Circle())
+                } else {
+                    Circle()
+                        .fill(Color(.secondarySystemBackground))
+                    Image(systemName: "camera.fill")
+                        .font(.system(size: 48))
+                        .foregroundStyle(.secondary)
+                }
+
+                Circle()
+                    .stroke(ringColor, lineWidth: 8)
+                    .scaleEffect(isPulsing ? 1.08 : 0.96)
+                    .opacity(isPulsing ? 1.0 : 0.5)
+                    .animation(
+                        .easeInOut(duration: camera.isFaceDetected ? 0.4 : 1.1).repeatForever(autoreverses: true),
+                        value: isPulsing
+                    )
+            }
+            .frame(width: circleSize, height: circleSize)
+            .onAppear {
+                camera.start()
+                isPulsing = true
+            }
+            .onDisappear {
+                camera.stop()
+            }
+
+            Text(camera.isFaceDetected ? "Face found — hold still…" : "Looking for a face…")
                 .font(.title2.weight(.medium))
                 .foregroundStyle(.secondary)
+                .contentTransition(.opacity)
+                .animation(.easeInOut(duration: 0.2), value: camera.isFaceDetected)
         }
+    }
+
+    private var ringColor: Color {
+        camera.isFaceDetected ? .green : .accentColor
     }
 }
 
