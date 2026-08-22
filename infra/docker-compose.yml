@@ -12,6 +12,24 @@
 #   docker compose up -d
 #
 # See infra/README.md for the full Droplet setup runbook.
+#
+# ─── Memory budget (sized for a 4GB / 2vCPU Droplet) ────────────────────────────
+# CompreFace's own defaults (-Xmx4g for compreface-api) assume a much bigger host.
+# On a 4GB box that also runs a second Postgres (waivego-db) and, later,
+# services/api, letting one JVM claim up to 4GB by itself would starve everything
+# else. Each service below has a hard `mem_limit`, and the JVM heap sizes in
+# .env.example were reduced to fit under those limits with room to spare:
+#   compreface-postgres-db  256m
+#   compreface-admin        512m   (JVM heap capped at 512m)
+#   compreface-api          1300m  (JVM heap capped at 1200m)
+#   compreface-core          900m  (Python/TensorFlow inference — no JVM heap knob)
+#   compreface-fe              96m  (nginx, lightweight)
+#   waivego-db               256m
+#   ────────────────────────────
+#   total                  ~3.3GB, leaving ~700MB for the OS/Docker on a 4GB box
+# If you resize to 8GB later, raise both the mem_limits here and the
+# *_java_options heap sizes in .env.example together — a bigger container limit
+# with the same small heap just wastes the extra RAM.
 
 volumes:
   compreface-postgres-data:
@@ -30,6 +48,7 @@ services:
     restart: always
     container_name: compreface-postgres-db
     networks: [backend]
+    mem_limit: 256m
     environment:
       - POSTGRES_USER=${postgres_username}
       - POSTGRES_PASSWORD=${postgres_password}
@@ -42,6 +61,7 @@ services:
     image: ${registry}compreface-admin:${ADMIN_VERSION}
     container_name: compreface-admin
     networks: [backend]
+    mem_limit: 512m
     environment:
       - POSTGRES_USER=${postgres_username}
       - POSTGRES_PASSWORD=${postgres_password}
@@ -64,6 +84,7 @@ services:
     image: ${registry}compreface-api:${API_VERSION}
     container_name: compreface-api
     networks: [backend]
+    mem_limit: 1300m
     depends_on:
       - compreface-postgres-db
     environment:
@@ -83,6 +104,7 @@ services:
     image: ${registry}compreface-fe:${FE_VERSION}
     container_name: compreface-ui
     networks: [backend]
+    mem_limit: 96m
     # No `ports:` mapping on purpose — reach the admin UI via `docker compose exec`/an
     # SSH tunnel when you need it (e.g. `ssh -L 8000:localhost:8000 <droplet-ip>` then
     # temporarily add a `ports: ["127.0.0.1:8000:80"]` line), not a public port.
@@ -99,6 +121,7 @@ services:
     image: ${registry}compreface-core:${CORE_VERSION}
     container_name: compreface-core
     networks: [backend]
+    mem_limit: 900m
     environment:
       - ML_PORT=3000
       - IMG_LENGTH_LIMIT=${max_detect_size}
@@ -120,6 +143,7 @@ services:
     restart: always
     container_name: waivego-db
     networks: [backend]
+    mem_limit: 256m
     environment:
       - POSTGRES_USER=${waivego_db_username}
       - POSTGRES_PASSWORD=${waivego_db_password}

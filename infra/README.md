@@ -56,6 +56,9 @@ own firewall down explicitly (defense in depth, and to prepare for `waivego-api`
 cd WaiveGO/infra
 docker compose up -d
 docker compose ps        # confirm all containers are healthy/running
+docker stats             # watch actual memory use against the mem_limits — if
+                          # something is consistently near its cap, that's your
+                          # signal to resize the Droplet before it OOMs
 ```
 
 CompreFace's admin UI has no public port by design (see the comment in `docker-compose.yml`).
