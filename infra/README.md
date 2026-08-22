@@ -66,9 +66,27 @@ To reach it for initial setup (creating your admin account, an application, and 
 collection), tunnel it over SSH instead of exposing it:
 
 ```bash
+# on the Droplet — add a loopback-only port (not committed to git; a
+# docker-compose.override.yml is picked up automatically alongside docker-compose.yml):
+cat > docker-compose.override.yml << 'EOF'
+services:
+  compreface-fe:
+    ports:
+      - "127.0.0.1:8000:80"
+EOF
+docker compose up -d compreface-fe
+
+# from your own machine:
 ssh -L 8000:localhost:8000 root@<droplet-ip>
-# then temporarily add `ports: ["127.0.0.1:8000:80"]` under compreface-fe, `docker compose up -d`
-# open http://localhost:8000 on your own machine, do your setup, then remove the ports line
+# open http://localhost:8000 in your browser, create your admin account, an
+# Application, and a Face Collection service inside it — CompreFace generates an
+# API key for that service; save it into .env as compreface_recognition_api_key
+# (see .env.example for the exact key name)
+
+# back on the Droplet, once you're done:
+rm docker-compose.override.yml
+docker compose up -d compreface-fe   # recreates it without the port — confirm with
+                                      # `docker port compreface-ui` (should print nothing)
 ```
 
 ## 5. Next steps (not done yet)
