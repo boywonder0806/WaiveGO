@@ -81,12 +81,21 @@ struct CheckInView: View {
 private struct IdleStateView: View {
     let onTap: () -> Void
 
+    @State private var isPulsing = false
+
     var body: some View {
         Button(action: onTap) {
             VStack(spacing: 20) {
                 Image(systemName: "faceid")
                     .font(.system(size: 96))
                     .foregroundStyle(Color.accentColor)
+                    .scaleEffect(isPulsing ? 1.12 : 0.92)
+                    .opacity(isPulsing ? 1.0 : 0.6)
+                    .animation(
+                        .easeInOut(duration: 1.1).repeatForever(autoreverses: true),
+                        value: isPulsing
+                    )
+                    .onAppear { isPulsing = true }
                 Text("WaiveGO")
                     .font(.largeTitle.bold())
                 Text("Tap to scan your face and check in")
