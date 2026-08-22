@@ -26,8 +26,8 @@ Guest face  ─┐
 - **apps/web** — Staff/admin dashboard. Check-in activity, waiver status, exceptions,
   guest management. Next.js + TypeScript.
 - **apps/ipad** — Front-of-house check-in app used on iPads. Captures a guest photo and shows
-  the verification result. Stack TBD (native SwiftUI vs. web/PWA vs. React Native) — see
-  "Open decisions" below.
+  the verification result. Native SwiftUI (`apps/ipad/WaiveGO`), currently a skeleton
+  idle/scanning/result flow with mocked data — no camera or service calls wired up yet.
 - **services/api** — Backend of record. Owns the data layer, auth, and the Smartwaiver API
   integration (looking up waivers, checking signed status, webhooks for new signatures). Node.
 - **services/facial-recognition** — Enrolls and matches guest faces. Called by the API/iPad app
@@ -38,8 +38,6 @@ Guest face  ─┐
 
 ## Open decisions
 
-- **iPad app stack**: native SwiftUI vs. installable web app (PWA) vs. React Native/Expo.
-  Affects camera access, offline behavior, and how much code is shared with `apps/web`.
 - **Facial recognition stack**: language/framework/library, and whether face data is stored
   locally per-device, centrally, or not persisted beyond the matching step (privacy/compliance
   implications here — needs a decision before real guest data touches this system).

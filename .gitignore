@@ -23,10 +23,10 @@ __pycache__/
 venv/
 
 # Xcode / iOS
-*.xcodeproj/xcuserdata/
-*.xcworkspace/xcuserdata/
+xcuserdata/
 DerivedData/
 *.ipa
+*.xcuserstate
 
 # Logs
 *.log
