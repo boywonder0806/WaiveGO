@@ -21,7 +21,7 @@ struct CheckInView: View {
                 case .idle:
                     IdleStateView(onTap: viewModel.startScan)
                 case .scanning:
-                    ScanningStateView()
+                    ScanningStateView(camera: viewModel.camera)
                 case .verified(let match):
                     ResultStateView(
                         tint: .green,
@@ -108,7 +108,10 @@ private struct IdleStateView: View {
 }
 
 private struct ScanningStateView: View {
-    @StateObject private var camera = CameraService()
+    /// Shared with CheckInViewModel, not owned here — the same camera session drives
+    /// both this preview and the actual "has a face been held in frame" decision, so
+    /// what you see on screen always matches what the state machine is acting on.
+    @ObservedObject var camera: CameraService
     @State private var isPulsing = false
 
     private let circleSize: CGFloat = 320
@@ -138,11 +141,10 @@ private struct ScanningStateView: View {
             }
             .frame(width: circleSize, height: circleSize)
             .onAppear {
-                camera.start()
+                // The camera itself is started by CheckInViewModel.startScan() (so it
+                // gets a head start before this view even appears) — just drive the
+                // pulse animation here.
                 isPulsing = true
-            }
-            .onDisappear {
-                camera.stop()
             }
 
             Text(camera.isFaceDetected ? "Face found — hold still…" : "Looking for a face…")
