@@ -30,20 +30,32 @@ Guest face  ─┐
   idle/scanning/result flow with mocked data — no camera or service calls wired up yet.
 - **services/api** — Backend of record. Owns the data layer, auth, and the Smartwaiver API
   integration (looking up waivers, checking signed status, webhooks for new signatures). Node.
-- **services/facial-recognition** — Enrolls and matches guest faces. Called by the API/iPad app
-  during check-in. Stack TBD — likely to end up as a Python service given the CV/ML library
-  ecosystem (e.g. face_recognition, OpenCV, dlib), but not committed yet.
+- **services/facial-recognition** — Enrolls and matches guest faces. Called by `services/api`
+  during check-in. Self-hosted [CompreFace](https://github.com/exadel-inc/CompreFace) (Apache
+  2.0, runs via Docker) — chosen over a managed API like AWS Rekognition so guest biometric
+  data never leaves infrastructure we control. Deployment config lives in `infra/`, not this
+  folder — CompreFace ships as prebuilt images, there's no WaiveGO-authored service code here
+  (yet — see `infra/docker-compose.yml`'s TODO for how `services/api` will eventually front it).
 - **packages/shared** — Cross-cutting TypeScript types/constants/utils shared by `apps/web` and
   `services/api` (e.g. the shape of a "check-in result").
 
 ## Open decisions
 
-- **Facial recognition stack**: language/framework/library, and whether face data is stored
-  locally per-device, centrally, or not persisted beyond the matching step (privacy/compliance
-  implications here — needs a decision before real guest data touches this system).
+- **Face data retention**: CompreFace stores enrolled face images/embeddings by design — how
+  long guest faces stay enrolled (season? indefinitely? deleted on request?) is still an open
+  question, and matters for the privacy notes below.
 - **Smartwaiver integration model**: poll the Smartwaiver API on demand at check-in vs. sync
   waivers into our own datastore via webhooks and query locally.
-- **Hosting/infra**: not yet decided; `infra/` is currently a placeholder.
+- **services/api language**: Node is the plan (see Components above) but no code exists yet.
+
+## Hosting
+
+Single DigitalOcean Droplet running Docker Compose — CompreFace, WaiveGO's own Postgres, and
+(once built) `services/api`, all on a private Docker network with no public ports except
+`services/api` behind a reverse proxy. See `infra/README.md` for the full setup runbook and
+`infra/docker-compose.yml` for the stack definition. Revisit (split services onto separate
+Droplets, managed Postgres, etc.) once real traffic justifies it — see the trade-off note in
+`infra/README.md`.
 
 ## Data & privacy notes (to revisit before building the facial recognition service)
 

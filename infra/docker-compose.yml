@@ -1,0 +1,135 @@
+# WaiveGO core services — meant to run on a single DigitalOcean Droplet for now.
+#
+# Everything here lives on an internal-only Docker network (`backend`) with NO ports
+# published to the host. Nothing in this file is reachable from the public internet by
+# itself — that's deliberate, since CompreFace holds guest biometric data and
+# waivego-db holds guest PII. The only thing that should ever be public-facing is
+# `waivego-api` (not yet built — see the TODO at the bottom) sitting behind a reverse
+# proxy with TLS.
+#
+# Usage:
+#   cp .env.example .env   # then fill in real secrets, do NOT commit .env
+#   docker compose up -d
+#
+# See infra/README.md for the full Droplet setup runbook.
+
+volumes:
+  compreface-postgres-data:
+  waivego-postgres-data:
+
+networks:
+  backend:
+    driver: bridge
+
+services:
+  # ─── Facial recognition (CompreFace) ────────────────────────────────────────────
+  # https://github.com/exadel-inc/CompreFace
+
+  compreface-postgres-db:
+    image: ${registry}compreface-postgres-db:${POSTGRES_VERSION}
+    restart: always
+    container_name: compreface-postgres-db
+    networks: [backend]
+    environment:
+      - POSTGRES_USER=${postgres_username}
+      - POSTGRES_PASSWORD=${postgres_password}
+      - POSTGRES_DB=${postgres_db}
+    volumes:
+      - compreface-postgres-data:/var/lib/postgresql/data
+
+  compreface-admin:
+    restart: always
+    image: ${registry}compreface-admin:${ADMIN_VERSION}
+    container_name: compreface-admin
+    networks: [backend]
+    environment:
+      - POSTGRES_USER=${postgres_username}
+      - POSTGRES_PASSWORD=${postgres_password}
+      - POSTGRES_URL=jdbc:postgresql://${postgres_domain}:${postgres_port}/${postgres_db}
+      - SPRING_PROFILES_ACTIVE=dev
+      - ENABLE_EMAIL_SERVER=${enable_email_server}
+      - EMAIL_HOST=${email_host}
+      - EMAIL_USERNAME=${email_username}
+      - EMAIL_FROM=${email_from}
+      - EMAIL_PASSWORD=${email_password}
+      - ADMIN_JAVA_OPTS=${compreface_admin_java_options}
+      - MAX_FILE_SIZE=${max_file_size}
+      - MAX_REQUEST_SIZE=${max_request_size}B
+    depends_on:
+      - compreface-postgres-db
+      - compreface-api
+
+  compreface-api:
+    restart: always
+    image: ${registry}compreface-api:${API_VERSION}
+    container_name: compreface-api
+    networks: [backend]
+    depends_on:
+      - compreface-postgres-db
+    environment:
+      - POSTGRES_USER=${postgres_username}
+      - POSTGRES_PASSWORD=${postgres_password}
+      - POSTGRES_URL=jdbc:postgresql://${postgres_domain}:${postgres_port}/${postgres_db}
+      - SPRING_PROFILES_ACTIVE=dev
+      - API_JAVA_OPTS=${compreface_api_java_options}
+      - SAVE_IMAGES_TO_DB=${save_images_to_db}
+      - MAX_FILE_SIZE=${max_file_size}
+      - MAX_REQUEST_SIZE=${max_request_size}B
+      - CONNECTION_TIMEOUT=${connection_timeout}
+      - READ_TIMEOUT=${read_timeout}
+
+  compreface-fe:
+    restart: always
+    image: ${registry}compreface-fe:${FE_VERSION}
+    container_name: compreface-ui
+    networks: [backend]
+    # No `ports:` mapping on purpose — reach the admin UI via `docker compose exec`/an
+    # SSH tunnel when you need it (e.g. `ssh -L 8000:localhost:8000 <droplet-ip>` then
+    # temporarily add a `ports: ["127.0.0.1:8000:80"]` line), not a public port.
+    depends_on:
+      - compreface-api
+      - compreface-admin
+    environment:
+      - CLIENT_MAX_BODY_SIZE=${max_request_size}
+      - PROXY_READ_TIMEOUT=${read_timeout}ms
+      - PROXY_CONNECT_TIMEOUT=${connection_timeout}ms
+
+  compreface-core:
+    restart: always
+    image: ${registry}compreface-core:${CORE_VERSION}
+    container_name: compreface-core
+    networks: [backend]
+    environment:
+      - ML_PORT=3000
+      - IMG_LENGTH_LIMIT=${max_detect_size}
+      - UWSGI_PROCESSES=${uwsgi_processes}
+      - UWSGI_THREADS=${uwsgi_threads}
+    healthcheck:
+      test: curl --fail http://localhost:3000/healthcheck || exit 1
+      interval: 10s
+      retries: 0
+      start_period: 0s
+      timeout: 1s
+
+  # ─── WaiveGO application database ───────────────────────────────────────────────
+  # Separate from CompreFace's own Postgres above — this holds WaiveGO's own data
+  # (guests, check-ins, cached Smartwaiver records), not face embeddings.
+
+  waivego-db:
+    image: postgres:16-alpine
+    restart: always
+    container_name: waivego-db
+    networks: [backend]
+    environment:
+      - POSTGRES_USER=${waivego_db_username}
+      - POSTGRES_PASSWORD=${waivego_db_password}
+      - POSTGRES_DB=${waivego_db_name}
+    volumes:
+      - waivego-postgres-data:/var/lib/postgresql/data
+
+  # ─── TODO: waivego-api ───────────────────────────────────────────────────────────
+  # Once services/api has a Dockerfile, add a service block here that:
+  #   - joins the `backend` network (so it can reach compreface-fe and waivego-db by
+  #     container name, e.g. http://compreface-fe/api/v1/...)
+  #   - is the ONLY service in this file with a published port, and only behind a
+  #     reverse proxy (Caddy/nginx) terminating TLS — see infra/README.md
