@@ -1,0 +1,10 @@
+{
+  "name": "waivego",
+  "private": true,
+  "description": "Smartwaiver + facial recognition check-in verification system (iPad app + web dashboard).",
+  "workspaces": [
+    "apps/*",
+    "services/*",
+    "packages/*"
+  ]
+}
