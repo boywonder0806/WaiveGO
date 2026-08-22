@@ -14,22 +14,25 @@
 # See infra/README.md for the full Droplet setup runbook.
 #
 # ─── Memory budget (sized for a 4GB / 2vCPU Droplet) ────────────────────────────
-# CompreFace's own defaults (-Xmx4g for compreface-api) assume a much bigger host.
-# On a 4GB box that also runs a second Postgres (waivego-db) and, later,
-# services/api, letting one JVM claim up to 4GB by itself would starve everything
-# else. Each service below has a hard `mem_limit`, and the JVM heap sizes in
-# .env.example were reduced to fit under those limits with room to spare:
-#   compreface-postgres-db  256m
-#   compreface-admin        512m   (JVM heap capped at 512m)
-#   compreface-api          1300m  (JVM heap capped at 1200m)
-#   compreface-core          900m  (Python/TensorFlow inference — no JVM heap knob)
-#   compreface-fe              96m  (nginx, lightweight)
-#   waivego-db               256m
+# Revised from a live OOM crash loop: CompreFace's default UWSGI_PROCESSES=2 means
+# compreface-core forks TWO worker processes, and each one independently loads its
+# own full copy of the face detection/landmarks/age/gender/mask/pose models — so the
+# original 900m cap (sized for one copy) was killed by the kernel (signal 9) under
+# two. Fix: UWSGI_PROCESSES=1 (a single kiosk has no need for concurrent workers
+# anyway) plus a bigger cap for that one worker's real footprint, with everything
+# else trimmed down to what was actually observed in `docker stats` (mostly tens of
+# MB, nowhere near their old caps):
+#   compreface-postgres-db   200m   (observed ~50m)
+#   compreface-admin         400m   (JVM heap capped at 300m; observed ~110m)
+#   compreface-api           700m   (JVM heap capped at 550m; observed ~110m)
+#   compreface-core         1700m   (Python/TensorFlow, 1 worker — this is the one
+#                                    that actually needs the room)
+#   compreface-fe              64m  (nginx, lightweight)
+#   waivego-db                200m
 #   ────────────────────────────
-#   total                  ~3.3GB, leaving ~700MB for the OS/Docker on a 4GB box
-# If you resize to 8GB later, raise both the mem_limits here and the
-# *_java_options heap sizes in .env.example together — a bigger container limit
-# with the same small heap just wastes the extra RAM.
+#   total                   ~3.26GB, leaving ~550MB for the OS/Docker on a 4GB box
+# If you resize to a bigger Droplet later, raise both the mem_limits here and the
+# *_java_options heap sizes / uwsgi_processes in .env.example together.
 
 volumes:
   compreface-postgres-data:
@@ -48,7 +51,7 @@ services:
     restart: always
     container_name: compreface-postgres-db
     networks: [backend]
-    mem_limit: 256m
+    mem_limit: 200m
     environment:
       - POSTGRES_USER=${postgres_username}
       - POSTGRES_PASSWORD=${postgres_password}
@@ -61,7 +64,7 @@ services:
     image: ${registry}compreface-admin:${ADMIN_VERSION}
     container_name: compreface-admin
     networks: [backend]
-    mem_limit: 512m
+    mem_limit: 400m
     environment:
       - POSTGRES_USER=${postgres_username}
       - POSTGRES_PASSWORD=${postgres_password}
@@ -84,7 +87,7 @@ services:
     image: ${registry}compreface-api:${API_VERSION}
     container_name: compreface-api
     networks: [backend]
-    mem_limit: 1300m
+    mem_limit: 700m
     depends_on:
       - compreface-postgres-db
     environment:
@@ -104,7 +107,7 @@ services:
     image: ${registry}compreface-fe:${FE_VERSION}
     container_name: compreface-ui
     networks: [backend]
-    mem_limit: 96m
+    mem_limit: 64m
     # No `ports:` mapping on purpose — reach the admin UI via `docker compose exec`/an
     # SSH tunnel when you need it (e.g. `ssh -L 8000:localhost:8000 <droplet-ip>` then
     # temporarily add a `ports: ["127.0.0.1:8000:80"]` line), not a public port.
@@ -121,7 +124,7 @@ services:
     image: ${registry}compreface-core:${CORE_VERSION}
     container_name: compreface-core
     networks: [backend]
-    mem_limit: 900m
+    mem_limit: 1700m
     environment:
       - ML_PORT=3000
       - IMG_LENGTH_LIMIT=${max_detect_size}
@@ -143,7 +146,7 @@ services:
     restart: always
     container_name: waivego-db
     networks: [backend]
-    mem_limit: 256m
+    mem_limit: 200m
     environment:
       - POSTGRES_USER=${waivego_db_username}
       - POSTGRES_PASSWORD=${waivego_db_password}
