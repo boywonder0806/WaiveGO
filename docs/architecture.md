@@ -28,8 +28,12 @@ Guest face  ─┐
 - **apps/ipad** — Front-of-house check-in app used on iPads. Captures a guest photo and shows
   the verification result. Native SwiftUI (`apps/ipad/WaiveGO`), currently a skeleton
   idle/scanning/result flow with mocked data — no camera or service calls wired up yet.
-- **services/api** — Backend of record. Owns the data layer, auth, and the Smartwaiver API
-  integration (looking up waivers, checking signed status, webhooks for new signatures). Node.
+- **services/api** — Backend of record. Node + TypeScript + Express. Owns the `guests` /
+  `check_ins` data layer (`waivego-db`), the Smartwaiver API integration (waiver lookups; a
+  webhook receiver stub), and calls CompreFace directly for enroll/recognize. Real endpoints
+  exist (`POST /v1/checkin`, `POST /v1/guests`, `POST /v1/webhooks/smartwaiver`) — see
+  `services/api/README.md`. No auth yet, and not deployed to the Droplet yet (not in
+  `infra/docker-compose.yml` — see that file's TODO).
 - **services/facial-recognition** — Enrolls and matches guest faces. Called by `services/api`
   during check-in. Self-hosted [CompreFace](https://github.com/exadel-inc/CompreFace) (Apache
   2.0, runs via Docker) — chosen over a managed API like AWS Rekognition so guest biometric
@@ -44,9 +48,12 @@ Guest face  ─┐
 - **Face data retention**: CompreFace stores enrolled face images/embeddings by design — how
   long guest faces stay enrolled (season? indefinitely? deleted on request?) is still an open
   question, and matters for the privacy notes below.
-- **Smartwaiver integration model**: poll the Smartwaiver API on demand at check-in vs. sync
-  waivers into our own datastore via webhooks and query locally.
-- **services/api language**: Node is the plan (see Components above) but no code exists yet.
+- **Smartwaiver integration model**: `services/api` currently re-checks Smartwaiver live on
+  every check-in (falling back to cached data if that call fails) rather than syncing via
+  webhooks — simplest to start with, worth revisiting if Smartwaiver's rate limits become a
+  concern at real volume.
+- **Auth**: none of `services/api`'s endpoints require it yet. Needs to happen before it gets
+  a public port (see `infra/docker-compose.yml`'s TODO).
 
 ## Hosting
 
