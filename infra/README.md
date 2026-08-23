@@ -41,13 +41,14 @@ nano .env   # fill in real passwords — long, random, unique per field
 
 ## 3. Lock down the firewall
 
-The compose file publishes **no ports** — CompreFace and both Postgres instances are only
-reachable from other containers on the `backend` Docker network. Still, lock the Droplet's
-own firewall down explicitly (defense in depth, and to prepare for `waivego-api` later):
+CompreFace and both Postgres instances are only reachable from other containers on the
+`backend` Docker network — nothing to open for them. `waivego-api` publishes a port, but only
+to loopback (`127.0.0.1`), so it isn't reachable externally either yet. Lock the Droplet's own
+firewall down explicitly anyway (defense in depth, and to prepare for going public later):
 
 - DigitalOcean Cloud Firewall (or `ufw` on the box): allow inbound **22 (SSH)** from your IP
-  only, and — once `waivego-api` exists — **80/443** from anywhere (that's the only public
-  surface this system should ever have).
+  only. Once `waivego-api` is ready to go public (domain + TLS + auth — see step 6), that's
+  when **80/443** gets opened too; nothing else should ever need to be.
 - Deny everything else inbound by default.
 
 ## 4. Bring the stack up
@@ -89,15 +90,35 @@ docker compose up -d compreface-fe   # recreates it without the port — confirm
                                       # `docker port compreface-ui` (should print nothing)
 ```
 
-## 5. Next steps (not done yet)
+## 5. waivego-api
 
-- Build `services/api` and add a `waivego-api` service block to `docker-compose.yml` (see the
-  TODO at the bottom of that file) — it joins the same `backend` network, talks to
-  `compreface-fe` and `waivego-db` by container name, and is the only service that ever gets
-  a public port.
+Built from `services/api`'s `Dockerfile`, on the `backend` network so it reaches
+`compreface-ui` and `waivego-db` by container name — no tunneling needed for it to talk to
+either of those. It's already in `docker-compose.yml`; rebuild after pulling changes:
+
+```bash
+cd WaiveGO/infra
+git pull
+docker compose build waivego-api
+docker compose up -d waivego-api
+```
+
+Its own port is loopback-only (`127.0.0.1:3001`) — same reasoning as CompreFace's admin UI
+above (no auth on it yet, and it carries guest photos that shouldn't cross plain HTTP). Reach
+it the same way, via SSH tunnel:
+
+```bash
+ssh -L 3001:localhost:3001 root@<droplet-ip>
+curl http://localhost:3001/health
+```
+
+## 6. Next steps (not done yet)
+
 - Put a reverse proxy (Caddy is the easiest — automatic HTTPS via Let's Encrypt with a few
-  lines of config) in front of `waivego-api` once it exists, so the iPad app talks to it over
-  HTTPS on a real domain instead of a bare IP.
+  lines of config) in front of `waivego-api`, get a domain pointed at the Droplet, and add
+  auth to its endpoints (see `services/api/README.md`'s known gaps) — all three needed before
+  its port can move from loopback-only to actually public, which is what the iPad needs for
+  real (tunneling doesn't scale to a kiosk device on the guest network).
 - Set up automated backups: DigitalOcean Droplet snapshots cover the whole box; for
   point-in-time recovery of just the databases, `pg_dump` both Postgres containers on a cron
   schedule to DigitalOcean Spaces (or similar) instead.
