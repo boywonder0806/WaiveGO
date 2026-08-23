@@ -1,11 +1,12 @@
 # WaiveGO core services — meant to run on a single DigitalOcean Droplet for now.
 #
-# Everything here lives on an internal-only Docker network (`backend`) with NO ports
-# published to the host. Nothing in this file is reachable from the public internet by
-# itself — that's deliberate, since CompreFace holds guest biometric data and
-# waivego-db holds guest PII. The only thing that should ever be public-facing is
-# `waivego-api` (not yet built — see the TODO at the bottom) sitting behind a reverse
-# proxy with TLS.
+# Everything here lives on an internal-only Docker network (`backend`). Only
+# `waivego-api` publishes a port, and it's bound to 127.0.0.1 — reachable via SSH
+# tunnel from a dev machine, NOT from the public internet. That's deliberate:
+# CompreFace holds guest biometric data, waivego-db holds guest PII, and
+# waivego-api itself has no auth yet — none of this is ready to be public. Making
+# the iPad reach it for real needs a domain + TLS (reverse proxy in front) and auth
+# first — see infra/README.md and services/api/README.md's known gaps.
 #
 # Usage:
 #   cp .env.example .env   # then fill in real secrets, do NOT commit .env
@@ -154,9 +155,32 @@ services:
     volumes:
       - waivego-postgres-data:/var/lib/postgresql/data
 
-  # ─── TODO: waivego-api ───────────────────────────────────────────────────────────
-  # Once services/api has a Dockerfile, add a service block here that:
-  #   - joins the `backend` network (so it can reach compreface-fe and waivego-db by
-  #     container name, e.g. http://compreface-fe/api/v1/...)
-  #   - is the ONLY service in this file with a published port, and only behind a
-  #     reverse proxy (Caddy/nginx) terminating TLS — see infra/README.md
+  # ─── WaiveGO backend API ─────────────────────────────────────────────────────────
+  # Reaches compreface-ui and waivego-db by container name over the `backend`
+  # network — no tunneling needed now that it lives on the same Droplet as them.
+  #
+  # Port is loopback-only (127.0.0.1), same as compreface-fe's temporary tunnel
+  # port — reachable via SSH from a dev machine, NOT from the public internet. It
+  # is NOT yet safe to publish this publicly: there's no auth on any endpoint (see
+  # services/api/README.md), and check-in/enrollment send guest photos, which
+  # shouldn't cross the public internet over plain HTTP regardless. Making the iPad
+  # reach this for real needs a domain + TLS (reverse proxy in front) and some form
+  # of auth first — see infra/README.md.
+  waivego-api:
+    restart: always
+    build:
+      context: ../services/api
+    container_name: waivego-api
+    networks: [backend]
+    mem_limit: 300m
+    ports:
+      - "127.0.0.1:3001:3001"
+    depends_on:
+      - waivego-db
+      - compreface-fe
+    environment:
+      - PORT=3001
+      - DATABASE_URL=postgresql://${waivego_db_username}:${waivego_db_password}@waivego-db:5432/${waivego_db_name}
+      - COMPREFACE_BASE_URL=http://compreface-ui
+      - COMPREFACE_RECOGNITION_API_KEY=${compreface_recognition_api_key}
+      - SMARTWAIVER_API_KEY=${smartwaiver_api_key}
