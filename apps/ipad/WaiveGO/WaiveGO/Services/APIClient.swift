@@ -2,9 +2,7 @@
 //  APIClient.swift
 //  WaiveGO
 //
-//  Talks to services/api. Currently just the one call the check-in flow needs;
-//  POST /v1/guests (enrollment) will get a client method here too once there's an
-//  enrollment screen to call it from.
+//  Talks to services/api.
 
 import Foundation
 
@@ -36,19 +34,44 @@ final class APIClient {
     /// result. Throws on any network failure or non-2xx response — the caller
     /// decides how to present that (see CheckInViewModel).
     func checkIn(imageData: Data) async throws -> CheckInResponse {
-        try await postImage(imageData, to: "v1/checkin", decodeAs: CheckInResponse.self)
+        try await postMultipart(to: "v1/checkin", fields: [:], imageData: imageData, decodeAs: CheckInResponse.self)
     }
 
-    private func postImage<T: Decodable>(_ imageData: Data, to path: String, decodeAs: T.Type) async throws -> T {
+    /// Test-mode enrollment (see services/api/src/routes/guests.ts) — no Smartwaiver
+    /// waiver required, just a name and a photo. Once real Smartwaiver access
+    /// exists, real enrollment (smartwaiverWaiverId) can get its own client method
+    /// alongside this one.
+    func enrollTestGuest(fullName: String, imageData: Data) async throws -> Guest {
+        try await postMultipart(to: "v1/guests", fields: ["fullName": fullName], imageData: imageData, decodeAs: Guest.self)
+    }
+
+    func listGuests() async throws -> [Guest] {
+        var request = URLRequest(url: AppConfig.apiBaseURL.appendingPathComponent("v1/guests"))
+        request.httpMethod = "GET"
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try Self.validate(response, data: data)
+        return try JSONDecoder().decode([Guest].self, from: data)
+    }
+
+    private func postMultipart<T: Decodable>(
+        to path: String,
+        fields: [String: String],
+        imageData: Data,
+        decodeAs: T.Type
+    ) async throws -> T {
         var request = URLRequest(url: AppConfig.apiBaseURL.appendingPathComponent(path))
         request.httpMethod = "POST"
 
         let boundary = "Boundary-\(UUID().uuidString)"
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        request.httpBody = multipartBody(imageData: imageData, boundary: boundary)
+        request.httpBody = multipartBody(fields: fields, imageData: imageData, boundary: boundary)
 
         let (data, response) = try await URLSession.shared.data(for: request)
+        try Self.validate(response, data: data)
+        return try JSONDecoder().decode(T.self, from: data)
+    }
 
+    private static func validate(_ response: URLResponse, data: Data) throws {
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIClientError.invalidResponse
         }
@@ -56,12 +79,15 @@ final class APIClient {
             let message = String(data: data, encoding: .utf8) ?? "no response body"
             throw APIClientError.server(status: httpResponse.statusCode, message: message)
         }
-
-        return try JSONDecoder().decode(T.self, from: data)
     }
 
-    private func multipartBody(imageData: Data, boundary: String) -> Data {
+    private func multipartBody(fields: [String: String], imageData: Data, boundary: String) -> Data {
         var body = Data()
+        for (name, value) in fields {
+            body.append("--\(boundary)\r\n".utf8Data)
+            body.append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n".utf8Data)
+            body.append("\(value)\r\n".utf8Data)
+        }
         body.append("--\(boundary)\r\n".utf8Data)
         body.append("Content-Disposition: form-data; name=\"file\"; filename=\"capture.jpg\"\r\n".utf8Data)
         body.append("Content-Type: image/jpeg\r\n\r\n".utf8Data)

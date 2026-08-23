@@ -9,10 +9,31 @@ import SwiftUI
 
 struct CheckInView: View {
     @StateObject private var viewModel = CheckInViewModel()
+    @State private var showingGuests = false
 
     var body: some View {
         ZStack {
             background
+
+            // Staff-only affordance to manage enrolled guests. Deliberately small and
+            // corner-placed rather than hidden entirely — there's no access control
+            // on this yet (same gap as the API endpoints it calls), so it shouldn't
+            // read as more "official" than it currently is. Needs real gating (PIN,
+            // staff login, whatever) before this app runs on a guest-facing kiosk.
+            VStack {
+                HStack {
+                    Spacer()
+                    Button {
+                        showingGuests = true
+                    } label: {
+                        Image(systemName: "person.2.circle")
+                            .font(.title2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding()
+                }
+                Spacer()
+            }
 
             VStack(spacing: 32) {
                 Spacer()
@@ -52,6 +73,9 @@ struct CheckInView: View {
                 #endif
             }
             .padding(40)
+        }
+        .sheet(isPresented: $showingGuests) {
+            GuestsListView()
         }
     }
 
