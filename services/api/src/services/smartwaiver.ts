@@ -28,6 +28,14 @@ interface SmartwaiverWaiverResponse {
 }
 
 export async function getWaiver(waiverId: string): Promise<SmartwaiverWaiver> {
+  if (!config.smartwaiver.apiKey) {
+    // Defensive — callers should check config.smartwaiver.enabled before reaching
+    // here (see routes/guests.ts, routes/checkin.ts). A call that gets here anyway
+    // is a bug, not a "this guest has no waiver" case, so it throws rather than
+    // returning something that could be misread as a real result.
+    throw new Error("getWaiver called without SMARTWAIVER_API_KEY configured");
+  }
+
   const response = await fetch(`${config.smartwaiver.baseUrl}/v4/waivers/${waiverId}`, {
     headers: { Authorization: `Bearer ${config.smartwaiver.apiKey}` },
   });

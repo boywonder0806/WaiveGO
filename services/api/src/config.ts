@@ -30,6 +30,13 @@ export const config = {
 
   smartwaiver: {
     baseUrl: process.env.SMARTWAIVER_BASE_URL ?? "https://api.smartwaiver.com",
-    apiKey: required("SMARTWAIVER_API_KEY"),
+    // Optional, unlike the others — this server needs to run and be testable before
+    // Smartwaiver access exists (see routes/guests.ts's test-enrollment mode and
+    // routes/checkin.ts's TEST- guard). Every Smartwaiver-calling code path checks
+    // `enabled` first rather than assuming apiKey is set.
+    apiKey: process.env.SMARTWAIVER_API_KEY,
+    get enabled() {
+      return Boolean(this.apiKey);
+    },
   },
 } as const;

@@ -59,23 +59,33 @@ checkinRouter.post("/v1/checkin", photoUpload.single("file"), async (req, res) =
     }
 
     // Re-check Smartwaiver live rather than trusting only the cached expiration —
-    // catches a waiver that expired (or was invalidated) since enrollment. Falls
-    // back to the cached value if Smartwaiver is unreachable rather than failing
-    // the whole check-in over a transient network issue.
+    // catches a waiver that expired (or was invalidated) since enrollment. Skipped
+    // entirely for test guests (TEST- prefixed, from routes/guests.ts's test-mode
+    // enrollment) or when Smartwaiver isn't configured at all — there's nothing real
+    // to re-check, so just use the cached value. Also falls back to the cached
+    // value if a real Smartwaiver call fails, rather than failing the whole
+    // check-in over a transient network issue.
+    const isTestGuest = guest.smartwaiver_waiver_id.startsWith("TEST-");
     let isExpired: boolean;
     let expirationDate: string | null;
-    try {
-      const waiver = await getWaiver(guest.smartwaiver_waiver_id);
-      isExpired = waiver.expired;
-      expirationDate = waiver.expirationDate;
-      await pool.query(
-        `UPDATE guests SET waiver_expiration = $1, updated_at = now() WHERE id = $2`,
-        [expirationDate, guest.id]
-      );
-    } catch (err) {
-      console.warn(`Smartwaiver re-check failed for guest ${guest.id}, falling back to cached data`, err);
+
+    if (isTestGuest || !config.smartwaiver.enabled) {
       expirationDate = guest.waiver_expiration;
       isExpired = expirationDate !== null && new Date(expirationDate) < new Date();
+    } else {
+      try {
+        const waiver = await getWaiver(guest.smartwaiver_waiver_id);
+        isExpired = waiver.expired;
+        expirationDate = waiver.expirationDate;
+        await pool.query(
+          `UPDATE guests SET waiver_expiration = $1, updated_at = now() WHERE id = $2`,
+          [expirationDate, guest.id]
+        );
+      } catch (err) {
+        console.warn(`Smartwaiver re-check failed for guest ${guest.id}, falling back to cached data`, err);
+        expirationDate = guest.waiver_expiration;
+        isExpired = expirationDate !== null && new Date(expirationDate) < new Date();
+      }
     }
 
     if (isExpired) {

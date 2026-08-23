@@ -13,8 +13,18 @@ Node + TypeScript + Express. Owns:
 |---|---|---|
 | GET | `/health` | Liveness + DB connectivity check |
 | POST | `/v1/checkin` | iPad sends a captured photo (`file`) → recognizes the face, checks the matched guest's waiver, logs the attempt, returns `{ verified, reason?, guestName? }` |
-| POST | `/v1/guests` | Enroll a guest: `smartwaiverWaiverId` + a photo (`file`) → looks up the waiver, enrolls the face in CompreFace, stores the guest record |
+| GET | `/v1/guests` | List all enrolled guests |
+| POST | `/v1/guests` | Enroll a guest + a photo (`file`). Two modes — `smartwaiverWaiverId` (real: looks up the actual waiver, requires `SMARTWAIVER_API_KEY`) or `fullName` (test mode: no Smartwaiver call, stores a synthetic `TEST-<uuid>` waiver id that never expires) |
 | POST | `/v1/webhooks/smartwaiver` | Smartwaiver's new-waiver webhook — currently just logs and acknowledges (see TODO in `src/routes/webhooks.ts`) |
+
+## Running without Smartwaiver access
+
+`SMARTWAIVER_API_KEY` is optional. Without it, `POST /v1/guests` only accepts test-mode
+enrollment (`fullName` instead of `smartwaiverWaiverId`) and `/v1/checkin` never attempts a
+live waiver re-check for anyone — real Smartwaiver-backed enrollment starts working
+automatically the moment a key is added, no code changes needed. Test guests (`TEST-` prefixed
+`smartwaiver_waiver_id`) live in the same `guests` table as real ones and are always
+identifiable by that prefix.
 
 ## Local development
 
